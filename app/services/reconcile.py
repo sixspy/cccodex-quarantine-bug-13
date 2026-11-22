@@ -61,7 +61,7 @@ def run_reconcile(db_path: str | None = None) -> dict:
 
 
 def dashboard(db_path: str | None = None) -> dict:
-    from app.services.timeout_promote_audit import audit_summary as _timeout_promote_audit
+    from app.services.timeout_promotion import timeout_summary
     with get_db(db_path) as conn:
         return {
             "batches": conn.execute("SELECT COUNT(*) AS c FROM capture_batches").fetchone()["c"],
@@ -81,5 +81,5 @@ def dashboard(db_path: str | None = None) -> dict:
                 "SELECT COUNT(*) AS c FROM policy_rules WHERE enabled=1"
             ).fetchone()["c"],
             "audits": conn.execute("SELECT COUNT(*) AS c FROM audit_events").fetchone()["c"],
-            "timeout_promote_audit": _timeout_promote_audit(db_path),
+            "timeout_promotion": timeout_summary(db_path),
         }

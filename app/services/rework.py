@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.db import get_db
 from app.services import audit as audit_svc
 from app.services import settings as settings_svc
+from app.services import timeout_promotion as tp
 from app.services.errors import ServiceError
 
 
@@ -10,22 +11,34 @@ def list_jobs(db_path: str | None = None) -> list[dict]:
     with get_db(db_path) as conn:
         rows = conn.execute(
             """
-            SELECT j.*, i.item_key, r.reason, b.bin_code
+            SELECT j.*, i.item_key, i.batch_id, r.reason, b.bin_code,
+              CASE WHEN j.timed_out_at IS NOT NULL THEN ? ELSE '' END AS timeout_stage,
+              j.promotion_id AS promotion_snapshot_id
             FROM rework_jobs j
             JOIN quarantine_rows r ON r.id=j.row_id
             JOIN capture_items i ON i.id=r.item_id
             JOIN quarantine_bins b ON b.id=r.bin_id
             ORDER BY j.id DESC
-            """
+            """,
+            (tp.TIMEOUT_STAGE,),
         ).fetchall()
         return [dict(r) for r in rows]
 
 
+def mark_timeout(job_id: int, db_path: str | None = None) -> dict:
+    """回炉任务超时落失败档（委托超时晋升服务统一钉点）。"""
+    return tp.mark_timeout(job_id, db_path=db_path)
+
+
 def run_job(job_id: int, succeed: bool = True, db_path: str | None = None) -> dict:
+    # 继续清洗前先过晋升闸门：徽标/超时档/落点拧花或有悬挂即拦
+    tp.require_gate(db_path)
     with get_db(db_path) as conn:
         job = conn.execute("SELECT * FROM rework_jobs WHERE id=?", (job_id,)).fetchone()
         if not job:
             raise ServiceError("回炉任务不存在", 404)
+        if job["timed_out_at"]:
+            raise ServiceError("该任务已超时落档，须先走超时晋升，不能直接重跑")
         if job["status"] not in ("排队", "失败"):
             raise ServiceError("任务状态不可执行")
         max_attempt = int(settings_svc.get_value("rework_max_attempt", "3", db_path) or "3")

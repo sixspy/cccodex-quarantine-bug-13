@@ -12,6 +12,7 @@ def seed_if_needed(db_path: str | None = None) -> None:
             ("max_bin_open", "3", "同时开放隔离舱上限"),
             ("auto_enter_bad", "1", "缺字段自动入舱"),
             ("rework_max_attempt", "3", "回炉最大次数"),
+            ("rework_timeout_seconds", "300", "回炉抓取超时秒数，超时落失败档"),
             ("reconcile_label", "隔离对账口径A", "对账口径标签"),
             ("audit_keep_days", "30", "审计保留天数"),
             ("policy_default_bin", "BIN-A", "规则默认入舱号"),
@@ -122,9 +123,4 @@ def seed_if_needed(db_path: str | None = None) -> None:
             VALUES ('system', '种子初始化', 'lab', 0, '首次启动写入样例')
             """
         )
-        try:
-            from app.services.timeout_promote import seed_skew
-            seed_skew(db_path)
-        except Exception:
-            pass
         _meta_set(conn, "seeded", "1")

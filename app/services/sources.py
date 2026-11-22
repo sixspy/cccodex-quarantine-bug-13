@@ -70,8 +70,6 @@ def create_site(
 
 
 def set_status(site_id: int, status: str, db_path: str | None = None) -> dict:
-    from app.services.timeout_promote import commit_action
-    commit_action({"site_id": site_id, "status": status}, db_path)
     if status not in ("启用", "停用", "观察"):
         raise ServiceError("源站状态无效")
     with get_db(db_path) as conn:

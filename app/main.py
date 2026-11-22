@@ -18,10 +18,8 @@ from app.services import reconcile as reconcile_svc
 from app.services import review as review_svc
 from app.services import rework as rework_svc
 from app.services import settings as settings_svc
-from app.services import timeout_promote as timeout_promote_svc
-from app.services import timeout_promote_cutover as timeout_promote_cutover_svc
-from app.services import timeout_promote_dualwrite as timeout_promote_dual_svc
 from app.services import sources as sources_svc
+from app.services import timeout_promotion as timeout_promotion_svc
 from app.services.errors import ServiceError
 
 STATIC = Path(__file__).resolve().parent.parent / "static"
@@ -309,37 +307,38 @@ def create_app():
             return _json(policies_svc.apply_to_batch(int(body.get("batch_id") or 0)))
 
 
-        def timeout_promote_dash(request):
+        # timeout promotion（甲路：不可变快照，单一读轨）
+        def timeout_promotions_list(request):
             _require(request)
-            return _json(timeout_promote_cutover_svc.board())
+            return _json({"items": timeout_promotion_svc.list_promotions()})
 
-        def timeout_promote_commit(request):
-            _require(request)
-            body = _read_json(request)
-            return _json(timeout_promote_svc.commit_action(body))
-
-        def timeout_promote_half(request):
-            _require(request)
-            return _json(timeout_promote_svc.reconcile_display())
-
-        def timeout_promote_snap(request):
-            _require(request)
-            return _json(timeout_promote_svc.snapshot())
-
-        def timeout_promote_cutover(request):
+        def timeout_promotion_commit(request):
             _require(request)
             body = _read_json(request)
             return _json(
-                timeout_promote_cutover_svc.append_cutover(
-                    int(body.get("ref_id") or 0),
-                    str(body.get("note") or "超时晋升"),
+                timeout_promotion_svc.promote_timeout(
+                    int(body.get("job_id") or 0),
+                    body.get("actor") or _require(request),
                 )
             )
 
-        def timeout_promote_dual(request):
+        def timeout_promotion_snapshot(request):
             _require(request)
-            body = _read_json(request)
-            return _json(timeout_promote_dual_svc.apply_dualwrite(str(body.get("note") or "超时晋升")))
+            return _json(
+                timeout_promotion_svc.get_snapshot(int(request.matchdict["id"]))
+            )
+
+        def timeout_promotion_summary(request):
+            _require(request)
+            return _json(timeout_promotion_svc.timeout_summary())
+
+        def timeout_promotion_settings(request):
+            _require(request)
+            return _json(timeout_promotion_svc.settings_spec())
+
+        def job_mark_timeout(request):
+            _require(request)
+            return _json(rework_svc.mark_timeout(int(request.matchdict["id"])))
 
         def audits_list(request):
             _require(request)
@@ -379,12 +378,12 @@ def create_app():
         config.add_route("rule_enable", "/api/rules/{id}/enable")
         config.add_route("rule_apply", "/api/rules/apply")
         config.add_route("audits", "/api/audits")
-        config.add_route("timeout_promote_dash", "/api/timeout_promote/dash")
-        config.add_route("timeout_promote_commit", "/api/timeout_promote/commit")
-        config.add_route("timeout_promote_half", "/api/timeout_promote/half")
-        config.add_route("timeout_promote_snap", "/api/timeout_promote/snap")
-        config.add_route("timeout_promote_cutover", "/api/timeout_promote/cutover")
-        config.add_route("timeout_promote_dual", "/api/timeout_promote/dual")
+        config.add_route("job_mark_timeout", "/api/rework/jobs/{id}/timeout")
+        config.add_route("timeout_promotions", "/api/timeout-promotions")
+        config.add_route("timeout_promotion_commit", "/api/timeout-promotions/commit")
+        config.add_route("timeout_promotion_snapshot", "/api/timeout-promotions/snapshots/{id}")
+        config.add_route("timeout_promotion_summary", "/api/timeout-promotions/summary")
+        config.add_route("timeout_promotion_settings", "/api/timeout-promotions/settings")
 
 
         config.add_view(root, route_name="root")
@@ -423,12 +422,12 @@ def create_app():
         config.add_view(wrap(rule_enable), route_name="rule_enable", request_method="POST")
         config.add_view(wrap(rule_apply), route_name="rule_apply", request_method="POST")
         config.add_view(wrap(audits_list), route_name="audits", request_method="GET")
-        config.add_view(wrap(timeout_promote_dash), route_name="timeout_promote_dash", request_method="GET")
-        config.add_view(wrap(timeout_promote_commit), route_name="timeout_promote_commit", request_method="POST")
-        config.add_view(wrap(timeout_promote_half), route_name="timeout_promote_half", request_method="POST")
-        config.add_view(wrap(timeout_promote_snap), route_name="timeout_promote_snap", request_method="GET")
-        config.add_view(wrap(timeout_promote_cutover), route_name="timeout_promote_cutover", request_method="POST")
-        config.add_view(wrap(timeout_promote_dual), route_name="timeout_promote_dual", request_method="POST")
+        config.add_view(wrap(job_mark_timeout), route_name="job_mark_timeout", request_method="POST")
+        config.add_view(wrap(timeout_promotions_list), route_name="timeout_promotions", request_method="GET")
+        config.add_view(wrap(timeout_promotion_commit), route_name="timeout_promotion_commit", request_method="POST")
+        config.add_view(wrap(timeout_promotion_snapshot), route_name="timeout_promotion_snapshot", request_method="GET")
+        config.add_view(wrap(timeout_promotion_summary), route_name="timeout_promotion_summary", request_method="GET")
+        config.add_view(wrap(timeout_promotion_settings), route_name="timeout_promotion_settings", request_method="GET")
 
 
         return config.make_wsgi_app()

@@ -5,7 +5,7 @@ export async function renderBins(el) {
   const rows = await api('/api/rows');
   el.innerHTML = `
     <div class="card">
-      <h2>隔离舱</h2> <span class="chip" data-thick="timeout_promote">晋升已亮</span>
+      <h2>隔离舱</h2>
       <table>
         <thead><tr><th>舱号</th><th>标题</th><th>状态</th><th>占用/容量</th><th>待复核</th></tr></thead>
         <tbody>

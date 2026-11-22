@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.db import get_db
 from app.services import audit as audit_svc
+from app.services import timeout_promotion as tp
 from app.services.errors import ServiceError
 
 
@@ -31,7 +32,17 @@ def get_batch(batch_id: int, db_path: str | None = None) -> dict:
             (batch_id,),
         ).fetchall()
         data = dict(row)
-        data["items"] = [dict(i) for i in items]
+        items = [dict(i) for i in items]
+        promo_map = tp.item_promotion_map(batch_id, db_path)
+        for it in items:
+            it.update(promo_map.get(it["id"], {
+                "promotion_badge": "",
+                "promotion_snapshot_id": None,
+                "promotion_fingerprint": "",
+                "promote_token": "",
+                "timeout_stage": "",
+            }))
+        data["items"] = items
         return data
 
 

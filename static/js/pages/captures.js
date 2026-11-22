@@ -6,7 +6,7 @@ export async function renderCaptures(el) {
   const openBin = (bins.items || []).find((b) => b.status === '开放');
   el.innerHTML = `
     <div class="card">
-      <h2><span class="chip" data-thick="timeout_promote">晋升已亮</span> 抓取批次</h2>
+      <h2>抓取批次</h2>
       <div class="row">
         <input id="src" placeholder="来源名" />
         <input id="note" placeholder="备注" />
@@ -73,16 +73,33 @@ export async function renderCaptures(el) {
           <button id="addItem">追加条目</button>
         </div>
         <table>
-          <thead><tr><th>键</th><th>质量</th><th>状态</th></tr></thead>
+          <thead><tr><th>键</th><th>质量</th><th>状态</th><th>超时档</th><th>晋升徽标</th><th>晋升落点</th></tr></thead>
           <tbody>
             ${(d.items || []).map((i) => `
               <tr>
                 <td>${i.item_key}</td>
                 <td><span class="chip ${i.quality === '合格' ? 'ok' : 'bad'}">${i.quality}</span></td>
                 <td>${i.status}</td>
+                <td>${i.timeout_stage ? `<span class="chip bad">${i.timeout_stage}</span>` : '<span class="muted">—</span>'}</td>
+                <td>${i.promotion_badge === '已晋升'
+                  ? `<span class="chip ok">${i.promotion_badge}</span>`
+                  : (i.promotion_badge === '未晋升' ? `<span class="chip bad">${i.promotion_badge}</span>` : '<span class="muted">—</span>')}</td>
+                <td>${i.promotion_snapshot_id
+                  ? `<button class="ghost" data-snap="${i.promotion_snapshot_id}">快照#${i.promotion_snapshot_id}</button>`
+                  : '<span class="muted">无落点</span>'}</td>
               </tr>`).join('')}
           </tbody>
         </table>`;
+      box.querySelectorAll('[data-snap]').forEach((btn) => {
+        btn.onclick = async () => {
+          const snap = await api(`/api/timeout-promotions/snapshots/${btn.dataset.snap}`);
+          alert(
+            `晋升快照 #${snap.snapshot_id}\n令牌：${snap.promote_token}\n` +
+            `指纹：${snap.fingerprint}\n任务：${snap.snapshot_job_code}\n` +
+            `当刻状态：${snap.snapshot_job_status}（只读，不可回刷）`
+          );
+        };
+      });
       box.querySelector('#addItem').onclick = async () => {
         await api(`/api/batches/${d.id}/items`, {
           method: 'POST',

@@ -29,39 +29,18 @@ export async function renderSettings(el) {
     };
   });
 
-  try {
-    const dash = await api('/api/timeout_promote/dash');
-    el.innerHTML += `<div class="card" style="margin-top:1rem">
-      <h3>超时晋升</h3>
-      <span class="chip">${dash.chip}</span>
-      <p class="muted">读轨 ${dash.active_read} · 切流指纹 ${dash.cutover_fp || '空'} · 拒回刷 ${dash.reject_refresh} · 归档 ${dash.archive_count} · 新旗 ${dash.live_flag || '空'} · 对齐差 ${dash.panel_pack_mismatch}</p>
-      <div class="row">
-        <button id="go_timeout_promote" type="button">落台</button>
-        <button id="half_timeout_promote" type="button">半修对齐</button>
-        <button id="cut_timeout_promote" type="button">切流账册</button>
-        <button id="dual_timeout_promote" type="button">双写两轨</button>
-      </div>
-    </div>`;
-    const go = el.querySelector('#go_timeout_promote');
-    if (go) go.onclick = async () => {
-      await api('/api/timeout_promote/commit', { method:'POST', body: JSON.stringify({ref:1}) });
-      await renderSettings(el);
-    };
-    const half = el.querySelector('#half_timeout_promote');
-    if (half) half.onclick = async () => {
-      await api('/api/timeout_promote/half', { method:'POST', body:'{}' });
-      await renderSettings(el);
-    };
-    const cut = el.querySelector('#cut_timeout_promote');
-    if (cut) cut.onclick = async () => {
-      await api('/api/timeout_promote/cutover', { method:'POST', body: JSON.stringify({ref_id:1, note:'超时晋升'}) });
-      await renderSettings(el);
-    };
-    const dual = el.querySelector('#dual_timeout_promote');
-    if (dual) dual.onclick = async () => {
-      await api('/api/timeout_promote/dual', { method:'POST', body: JSON.stringify({note:'超时晋升'}) });
-      await renderSettings(el);
-    };
-  } catch (e) { /* optional surface */ }
-
+  // 超时晋升口径：只展甲路（不可变快照），不出现乙路账册/双写任何入口
+  const spec = await api('/api/timeout-promotions/settings');
+  el.innerHTML += `<div class="card" style="margin-top:1rem">
+    <h2>超时晋升口径</h2>
+    <div class="stat-strip">
+      <div class="stat"><b>${spec.mode}</b><span class="muted">${spec.mode_label}</span></div>
+      <div class="stat"><b>${spec.read_ref}</b><span class="muted">唯一读轨（只读快照表）</span></div>
+      <div class="stat"><b>${spec.timeout_stage}</b><span class="muted">回炉侧超时档</span></div>
+      <div class="stat"><b>${spec.promoted_badge}</b><span class="muted">详情侧晋升徽标</span></div>
+    </div>
+    <p class="muted">超时当刻任务键与晋升指纹一次写定，快照只读、拒绝回刷；
+      超时阈值 ${spec.timeout_policy.rework_timeout_seconds} 秒，
+      回炉最大次数 ${spec.timeout_policy.rework_max_attempt}。</p>
+  </div>`;
 }

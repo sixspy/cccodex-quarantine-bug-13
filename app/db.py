@@ -103,6 +103,23 @@ CREATE TABLE IF NOT EXISTS rework_jobs (
   message TEXT NOT NULL DEFAULT '',
   started_at TEXT,
   finished_at TEXT,
+  timed_out_at TEXT,
+  promotion_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS timeout_promotions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id INTEGER NOT NULL UNIQUE REFERENCES rework_jobs(id),
+  promote_token TEXT NOT NULL UNIQUE,
+  fingerprint TEXT NOT NULL,
+  snapshot_job_code TEXT NOT NULL,
+  snapshot_job_status TEXT NOT NULL,
+  snapshot_attempt INTEGER NOT NULL,
+  snapshot_message TEXT NOT NULL,
+  snapshot_item_key TEXT NOT NULL,
+  snapshot_timed_out_at TEXT NOT NULL,
+  actor TEXT NOT NULL DEFAULT 'admin',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -130,12 +147,23 @@ CREATE TABLE IF NOT EXISTS meta (
 """
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """对旧库补齐超时晋升所需列（CREATE TABLE IF NOT EXISTS 不改老表）。"""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(rework_jobs)").fetchall()}
+    if "timed_out_at" not in cols:
+        conn.execute("ALTER TABLE rework_jobs ADD COLUMN timed_out_at TEXT")
+    if "promotion_id" not in cols:
+        conn.execute("ALTER TABLE rework_jobs ADD COLUMN promotion_id INTEGER")
+
+
 def ensure_db() -> Path:
     Config.INSTANCE_DIR.mkdir(parents=True, exist_ok=True)
     path = Config.DATABASE_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(path) as conn:
+        conn.row_factory = sqlite3.Row
         conn.executescript(SCHEMA)
+        _migrate(conn)
         conn.commit()
     return path
 
@@ -144,9 +172,11 @@ def ensure_db() -> Path:
 def get_db(db_path: str | Path | None = None):
     path = Path(db_path) if db_path else Config.DATABASE_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
+    # 并发同抢时让后来者等锁而不是立刻报 database is locked
+    conn.execute("PRAGMA busy_timeout=10000")
     try:
         yield conn
         conn.commit()
