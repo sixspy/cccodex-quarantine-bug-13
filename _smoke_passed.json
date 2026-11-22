@@ -1,0 +1,12 @@
+{
+  "label": "quarantine-bug-13",
+  "port": 7533,
+  "login_url": "http://127.0.0.1:7533/login",
+  "http_status": 200,
+  "checks": [
+    "含登录相关文案",
+    "含密码表单线索"
+  ],
+  "passed": true,
+  "checked_at": "2026-11-22T22:34:28+08:00"
+}
